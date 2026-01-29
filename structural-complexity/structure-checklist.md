@@ -53,12 +53,14 @@
 
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
-| c_subq_0 | 서브쿼리 없음 | 0 | ast | 깊이 = 0 |
-| c_subq_depth_1 | 서브쿼리 깊이 1 | 10 | ast | 깊이 = 1 |
-| c_subq_depth_2 | 서브쿼리 깊이 2 | 20 | ast | 깊이 = 2 |
-| c_subq_depth_3plus | 서브쿼리 깊이 3+ | 30 | ast | 깊이 ≥ 3 |
-| c_subq_count | 서브쿼리 개수 | 5/개 | ast | 서브쿼리 총 개수 × 5 |
-| c_subq_correlated | 상관 서브쿼리 | 15 | ast | 외부 테이블 참조 |
+| c_subq_0 | 서브쿼리 없음 | 0 | regex | 깊이 = 0 |
+| c_subq_depth_1 | 서브쿼리 깊이 1 | 10 | regex | 깊이 = 1 |
+| c_subq_depth_2 | 서브쿼리 깊이 2 | 20 | regex | 깊이 = 2 |
+| c_subq_depth_3plus | 서브쿼리 깊이 3+ | 30 | regex | 깊이 ≥ 3 |
+| c_subq_count | 서브쿼리 개수 | 5/개 | regex | 서브쿼리 총 개수 × 5 |
+| c_subq_correlated | 상관 서브쿼리 | 15 | regex | 외부 테이블 참조 |
+
+> 서브쿼리 깊이는 순차 스캔 방식으로 `(SELECT` 패턴을 추적하여 계산합니다.
 
 ### 1.3 구조적 복잡성 - CTE
 

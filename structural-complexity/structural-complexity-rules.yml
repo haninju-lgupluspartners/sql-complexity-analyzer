@@ -95,43 +95,44 @@ common_rules:
 
   # ----------------------------------------------------------
   # 1.2 구조적 복잡성 - 서브쿼리
+  # 순차 스캔 방식으로 (SELECT 패턴을 추적하여 깊이 계산
   # ----------------------------------------------------------
   structural_subquery:
     - id: c_subq_0
       name: "서브쿼리 없음"
       weight: 0
-      detection_method: ast
+      detection_method: regex
       logic: "subquery_depth == 0"
       
     - id: c_subq_depth_1
       name: "서브쿼리 깊이 1"
       weight: 10
-      detection_method: ast
+      detection_method: regex
       logic: "subquery_depth == 1"
       
     - id: c_subq_depth_2
       name: "서브쿼리 깊이 2"
       weight: 20
-      detection_method: ast
+      detection_method: regex
       logic: "subquery_depth == 2"
       
     - id: c_subq_depth_3plus
       name: "서브쿼리 깊이 3+"
       weight: 30
-      detection_method: ast
+      detection_method: regex
       logic: "subquery_depth >= 3"
       
     - id: c_subq_count
       name: "서브쿼리 개수"
       weight: 5
       weight_per_occurrence: true
-      detection_method: ast
+      detection_method: regex
       logic: "subquery_count * 5"
       
     - id: c_subq_correlated
       name: "상관 서브쿼리"
       weight: 15
-      detection_method: ast
+      detection_method: regex
       logic: "has_correlated_subquery"
 
   # ----------------------------------------------------------

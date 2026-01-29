@@ -288,17 +288,21 @@ class SQLStructuralScoringEngine:
         join_pattern = re.compile(r'\bJOIN\b', re.IGNORECASE)
         metrics['join_count'] = len(join_pattern.findall(sql))
         
-        # 서브쿼리 깊이 (간단한 추정)
-        subquery_depth = 0
-        temp_sql = sql
-        while '(' in temp_sql:
-            # SELECT가 포함된 괄호 찾기
-            if re.search(r'\(\s*SELECT', temp_sql, re.IGNORECASE):
-                subquery_depth += 1
-                temp_sql = re.sub(r'\([^()]*\)', '', temp_sql)
-            else:
-                break
-        metrics['subquery_depth'] = min(subquery_depth, 5)
+        # 서브쿼리 깊이 (순차 스캔 방식)
+        max_depth = 0
+        current_depth = 0
+        sql_upper = sql.upper()
+        i = 0
+        while i < len(sql):
+            # (SELECT 패턴 발견 시 깊이 증가
+            if sql[i] == '(' and sql_upper[i:i+10].startswith('(SELECT'):
+                current_depth += 1
+                max_depth = max(max_depth, current_depth)
+            # ) 발견 시 서브쿼리 내부라면 깊이 감소
+            elif sql[i] == ')' and current_depth > 0:
+                current_depth -= 1
+            i += 1
+        metrics['subquery_depth'] = min(max_depth, 5)
         
         # 테이블 수 추정 (FROM, JOIN 뒤의 테이블)
         table_pattern = re.compile(r'\b(FROM|JOIN)\s+(\w+)', re.IGNORECASE)
