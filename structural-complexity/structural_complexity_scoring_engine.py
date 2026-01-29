@@ -304,10 +304,59 @@ class SQLStructuralScoringEngine:
             i += 1
         metrics['subquery_depth'] = min(max_depth, 5)
         
-        # 테이블 수 추정 (FROM, JOIN 뒤의 테이블)
-        table_pattern = re.compile(r'\b(FROM|JOIN)\s+(\w+)', re.IGNORECASE)
-        tables = table_pattern.findall(sql)
-        metrics['table_count'] = len(set([t[1].upper() for t in tables]))
+        # 테이블 수 추정 (개선된 로직)
+        # - 콤마로 구분된 테이블 지원
+        # - 스키마.테이블 형식에서 실제 테이블명 추출
+        # - SQL 키워드(LATERAL 등) 필터링
+        tables = set()
+        sql_keywords = {
+            'LATERAL', 'NATURAL', 'OUTER', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS',
+            'SELECT', 'WHERE', 'AND', 'OR', 'ON', 'AS', 'SET', 'VALUES', 'INTO'
+        }
+        
+        # FROM 절 처리 (콤마로 구분된 테이블 포함)
+        from_pattern = re.compile(
+            r'\bFROM\s+(?!\s*\()([\w.]+(?:\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+\w+)?)*)',
+            re.IGNORECASE
+        )
+        for match in from_pattern.finditer(sql):
+            from_clause = match.group(1)
+            table_parts = from_clause.split(',')
+            for part in table_parts:
+                part = part.strip()
+                if part:
+                    tokens = part.split()
+                    if tokens:
+                        table_name = tokens[0]
+                        if '.' in table_name:
+                            table_name = table_name.split('.')[-1]
+                        if table_name.upper() not in sql_keywords:
+                            tables.add(table_name.upper())
+        
+        # JOIN 절 처리 (LATERAL 등 키워드 제외)
+        join_pattern = re.compile(
+            r'\bJOIN\s+(?!LATERAL\b)(?!\s*\()([\w.]+)',
+            re.IGNORECASE
+        )
+        for match in join_pattern.finditer(sql):
+            table_name = match.group(1)
+            if '.' in table_name:
+                table_name = table_name.split('.')[-1]
+            if table_name.upper() not in sql_keywords:
+                tables.add(table_name.upper())
+        
+        # LATERAL 서브쿼리 내부 테이블 추출
+        lateral_pattern = re.compile(r'\bLATERAL\s*\(([^)]+)\)', re.IGNORECASE)
+        for match in lateral_pattern.finditer(sql):
+            inner_sql = match.group(1)
+            inner_from = re.findall(r'\bFROM\s+([\w.]+)', inner_sql, re.IGNORECASE)
+            for table_name in inner_from:
+                if '.' in table_name:
+                    table_name = table_name.split('.')[-1]
+                if table_name.upper() not in sql_keywords:
+                    tables.add(table_name.upper())
+        
+        metrics['table_count'] = len(tables)
         
         # SELECT 컬럼 수 추정
         select_match = re.search(r'SELECT\s+(.*?)\s+FROM', sql, re.IGNORECASE | re.DOTALL)

@@ -450,19 +450,19 @@ common_rules:
     - id: c_tables_3_5
       name: "테이블 3-5개"
       weight: 5
-      detection_method: ast
+      detection_method: regex
       logic: "3 <= table_count <= 5"
       
     - id: c_tables_6_10
       name: "테이블 6-10개"
       weight: 10
-      detection_method: ast
+      detection_method: regex
       logic: "6 <= table_count <= 10"
       
     - id: c_tables_11plus
       name: "테이블 11개 이상"
       weight: 15
-      detection_method: ast
+      detection_method: regex
       logic: "table_count >= 11"
 
 

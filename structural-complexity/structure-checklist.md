@@ -160,9 +160,9 @@
 | c_len_long | 긴 쿼리 (500-1000자) | 10 | metric | 500 ≤ len(sql) < 1000 |
 | c_len_very_long | 매우 긴 쿼리 (1000-2000자) | 15 | metric | 1000 ≤ len(sql) < 2000 |
 | c_len_huge | 초대형 쿼리 (2000자+) | 20 | metric | len(sql) ≥ 2000 |
-| c_tables_3_5 | 테이블 3-5개 | 5 | ast | 참조 테이블 수 3-5 |
-| c_tables_6_10 | 테이블 6-10개 | 10 | ast | 참조 테이블 수 6-10 |
-| c_tables_11plus | 테이블 11개 이상 | 15 | ast | 참조 테이블 수 ≥ 11 |
+| c_tables_3_5 | 테이블 3-5개 | 5 | regex | 참조 테이블 수 3-5 |
+| c_tables_6_10 | 테이블 6-10개 | 10 | regex | 참조 테이블 수 6-10 |
+| c_tables_11plus | 테이블 11개 이상 | 15 | regex | 참조 테이블 수 ≥ 11 |
 
 ---
 
