@@ -288,19 +288,27 @@ class SQLStructuralScoringEngine:
         join_pattern = re.compile(r'\bJOIN\b', re.IGNORECASE)
         metrics['join_count'] = len(join_pattern.findall(sql))
         
-        # 서브쿼리 깊이 (순차 스캔 방식)
+        # 서브쿼리 깊이 (괄호 매칭으로 정확한 종료 추적)
         max_depth = 0
-        current_depth = 0
+        subquery_stack = []  # 서브쿼리 시작 시점의 괄호 깊이 저장
+        paren_depth = 0
         sql_upper = sql.upper()
         i = 0
         while i < len(sql):
-            # (SELECT 패턴 발견 시 깊이 증가
-            if sql[i] == '(' and sql_upper[i:i+10].startswith('(SELECT'):
-                current_depth += 1
-                max_depth = max(max_depth, current_depth)
-            # ) 발견 시 서브쿼리 내부라면 깊이 감소
-            elif sql[i] == ')' and current_depth > 0:
-                current_depth -= 1
+            if sql[i] == '(':
+                paren_depth += 1
+                # ( 뒤의 공백을 건너뛰고 SELECT 확인
+                j = i + 1
+                while j < len(sql) and sql[j] in ' \t\n\r':
+                    j += 1
+                if sql_upper[j:j+6] == 'SELECT':
+                    subquery_stack.append(paren_depth)
+                    max_depth = max(max_depth, len(subquery_stack))
+            elif sql[i] == ')':
+                # 현재 괄호 깊이가 스택 top의 서브쿼리 시작 깊이와 같으면 서브쿼리 종료
+                if subquery_stack and paren_depth == subquery_stack[-1]:
+                    subquery_stack.pop()
+                paren_depth -= 1
             i += 1
         metrics['subquery_depth'] = min(max_depth, 5)
         
