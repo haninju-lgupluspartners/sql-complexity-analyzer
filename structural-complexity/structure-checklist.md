@@ -136,7 +136,7 @@
 |----|------|--------|---------|----------|
 | c_case | CASE 표현식 | 5/개 | regex | `\bCASE\b` 카운트 × 5 |
 | c_case_when | WHEN 절 | 2/개 | regex | `\bWHEN\b` 카운트 × 2 |
-| c_case_nested | 중첩 CASE | 15 | ast | CASE 내부에 CASE 존재 |
+| c_case_nested | 중첩 CASE | 15 | regex | CASE/END 깊이 ≥ 2 |
 
 ### 1.11 함수/표현식 - 공통 함수
 

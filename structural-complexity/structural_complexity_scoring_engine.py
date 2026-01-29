@@ -450,6 +450,30 @@ class SQLStructuralScoringEngine:
             
             metrics['where_condition_count'] = and_or_count + 1 if where_clause.strip() else 0
         
+        # 중첩 CASE 검출 (순차 스캔으로 CASE/END 깊이 추적)
+        case_pattern = re.compile(r'\bCASE\b', re.IGNORECASE)
+        end_pattern = re.compile(r'\bEND\b', re.IGNORECASE)
+        
+        events = []
+        for match in case_pattern.finditer(sql):
+            events.append((match.start(), 'CASE'))
+        for match in end_pattern.finditer(sql):
+            events.append((match.start(), 'END'))
+        
+        events.sort(key=lambda x: x[0])
+        
+        depth = 0
+        max_case_depth = 0
+        for pos, event_type in events:
+            if event_type == 'CASE':
+                depth += 1
+                max_case_depth = max(max_case_depth, depth)
+            elif event_type == 'END' and depth > 0:
+                depth -= 1
+        
+        metrics['case_max_depth'] = max_case_depth
+        metrics['has_nested_case'] = max_case_depth >= 2
+        
         return metrics
     
     def _apply_metric_rules(self, metrics: Dict[str, Any]) -> List[RuleMatch]:
@@ -521,6 +545,10 @@ class SQLStructuralScoringEngine:
             matched_rules.append(RuleMatch('c_where_cond_7_10', '조건 7-10개', 10, 'clause', 'where'))
         elif cond_count >= 11:
             matched_rules.append(RuleMatch('c_where_cond_11plus', '조건 11개 이상', 15, 'clause', 'where'))
+        
+        # 중첩 CASE 점수
+        if metrics.get('has_nested_case', False):
+            matched_rules.append(RuleMatch('c_case_nested', '중첩 CASE', 15, 'function_expression', 'case'))
         
         return matched_rules
 

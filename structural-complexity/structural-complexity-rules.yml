@@ -366,8 +366,8 @@ common_rules:
     - id: c_case_nested
       name: "중첩 CASE"
       weight: 15
-      detection_method: ast
-      logic: "has_nested_case"
+      detection_method: regex
+      logic: "case_max_depth >= 2"
 
   # ----------------------------------------------------------
   # 1.11 함수/표현식 - 공통 함수
