@@ -748,7 +748,7 @@ class SQLStructuralScoringEngine:
         
         return QueryScore(
             query_name=query_name,
-            sql=sql[:500] + '...' if len(sql) > 500 else sql,
+            sql=sql,  # 전체 SQL 저장 (축약하지 않음)
             raw_score=raw_score,
             normalized_score=round(normalized_score, 2),
             complexity_level=complexity_level,
