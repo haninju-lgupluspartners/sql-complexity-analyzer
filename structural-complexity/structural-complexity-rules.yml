@@ -193,25 +193,25 @@ common_rules:
     - id: c_select_cols_1_5
       name: "컬럼 1-5개"
       weight: 0
-      detection_method: ast
+      detection_method: regex
       logic: "1 <= select_column_count <= 5"
       
     - id: c_select_cols_6_10
       name: "컬럼 6-10개"
       weight: 5
-      detection_method: ast
+      detection_method: regex
       logic: "6 <= select_column_count <= 10"
       
     - id: c_select_cols_11_20
       name: "컬럼 11-20개"
       weight: 10
-      detection_method: ast
+      detection_method: regex
       logic: "11 <= select_column_count <= 20"
       
     - id: c_select_cols_21plus
       name: "컬럼 21개 이상"
       weight: 15
-      detection_method: ast
+      detection_method: regex
       logic: "select_column_count >= 21"
       
     - id: c_select_star

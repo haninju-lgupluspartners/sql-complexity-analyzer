@@ -358,17 +358,59 @@ class SQLStructuralScoringEngine:
         
         metrics['table_count'] = len(tables)
         
-        # SELECT 컬럼 수 추정
-        select_match = re.search(r'SELECT\s+(.*?)\s+FROM', sql, re.IGNORECASE | re.DOTALL)
-        if select_match:
-            select_clause = select_match.group(1)
-            if '*' in select_clause:
-                metrics['select_column_count'] = -1  # SELECT *
-            else:
-                # 콤마로 분리 (단순 추정)
-                metrics['select_column_count'] = select_clause.count(',') + 1
-        else:
+        # SELECT 컬럼 수 추정 (개선된 로직)
+        # - 순차 스캔으로 최상위 레벨의 FROM 찾기 (서브쿼리 내 FROM 무시)
+        # - SELECT * 검사 개선 (단독 * 또는 table.* 만)
+        # - 괄호 내 콤마 무시
+        sql_upper = sql.upper()
+        select_start = sql_upper.find('SELECT')
+        
+        if select_start == -1:
             metrics['select_column_count'] = 0
+        else:
+            # SELECT 뒤부터 순차 스캔으로 최상위 레벨의 FROM 찾기
+            start_pos = select_start + 6  # len('SELECT')
+            depth = 0
+            from_pos = -1
+            i = start_pos
+            
+            while i < len(sql) - 3:
+                char = sql[i]
+                if char == '(':
+                    depth += 1
+                elif char == ')':
+                    depth -= 1
+                elif depth == 0 and sql_upper[i:i+4] == 'FROM':
+                    # 단어 경계 확인
+                    before_ok = i == 0 or not sql[i-1].isalnum()
+                    after_ok = i + 4 >= len(sql) or not sql[i+4].isalnum()
+                    if before_ok and after_ok:
+                        from_pos = i
+                        break
+                i += 1
+            
+            if from_pos == -1:
+                metrics['select_column_count'] = 0
+            else:
+                select_clause = sql[start_pos:from_pos].strip()
+                # DISTINCT 제거
+                select_clause_clean = re.sub(r'^\s*(ALL\s+)?DISTINCT\s+', '', select_clause, flags=re.IGNORECASE)
+                
+                # SELECT * 검사 (단독 * 또는 table.* 만)
+                if re.match(r'^\s*\*\s*$', select_clause_clean):
+                    metrics['select_column_count'] = -1
+                elif re.match(r'^\s*\w+\.\*\s*$', select_clause_clean):
+                    metrics['select_column_count'] = -1
+                else:
+                    # 괄호 내용을 플레이스홀더로 치환하여 내부 콤마 무시
+                    processed = select_clause_clean
+                    for _ in range(50):  # 무한루프 방지
+                        match = re.search(r'\([^()]*\)', processed)
+                        if not match:
+                            break
+                        processed = processed[:match.start()] + '__PH__' + processed[match.end():]
+                    
+                    metrics['select_column_count'] = processed.count(',') + 1
         
         # WHERE 조건 수 (서브쿼리 제외, 순차 스캔 방식)
         sql_upper = sql.upper()

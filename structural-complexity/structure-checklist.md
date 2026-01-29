@@ -84,10 +84,10 @@
 
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
-| c_select_cols_1_5 | 컬럼 1-5개 | 0 | ast | SELECT 컬럼 수 1-5 |
-| c_select_cols_6_10 | 컬럼 6-10개 | 5 | ast | SELECT 컬럼 수 6-10 |
-| c_select_cols_11_20 | 컬럼 11-20개 | 10 | ast | SELECT 컬럼 수 11-20 |
-| c_select_cols_21plus | 컬럼 21개 이상 | 15 | ast | SELECT 컬럼 수 ≥ 21 |
+| c_select_cols_1_5 | 컬럼 1-5개 | 0 | regex | SELECT 컬럼 수 1-5 |
+| c_select_cols_6_10 | 컬럼 6-10개 | 5 | regex | SELECT 컬럼 수 6-10 |
+| c_select_cols_11_20 | 컬럼 11-20개 | 10 | regex | SELECT 컬럼 수 11-20 |
+| c_select_cols_21plus | 컬럼 21개 이상 | 15 | regex | SELECT 컬럼 수 ≥ 21 |
 | c_select_star | SELECT * | 5 | regex | `SELECT\s+\*` |
 | c_distinct | DISTINCT | 5 | regex | `SELECT\s+(ALL\s+)?DISTINCT` |
 
