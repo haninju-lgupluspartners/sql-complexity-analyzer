@@ -91,6 +91,8 @@
 
 ### 1.6 절 복잡성 - WHERE
 
+> 조건의 복잡도는 조건 수(AND/OR)로 측정합니다. 개별 비교 연산자(=, >=, <=, BETWEEN, LIKE 등)는 구조적 복잡도에 영향을 주지 않으므로 별도 카운팅하지 않습니다.
+
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
 | c_where_cond_1_3 | 조건 1-3개 | 0 | ast | 조건 수 1-3 |
@@ -98,8 +100,6 @@
 | c_where_cond_7_10 | 조건 7-10개 | 10 | ast | 조건 수 7-10 |
 | c_where_cond_11plus | 조건 11개 이상 | 15 | ast | 조건 수 ≥ 11 |
 | c_where_in_list | IN (값 목록) | 5 | regex | `IN\s*\([^)]+\)` (서브쿼리 제외) |
-| c_where_between | BETWEEN | 3 | regex | `\bBETWEEN\b` 카운트 |
-| c_where_like | LIKE | 3 | regex | `\bLIKE\b` 카운트 |
 
 ### 1.7 절 복잡성 - GROUP BY / HAVING / ORDER BY
 

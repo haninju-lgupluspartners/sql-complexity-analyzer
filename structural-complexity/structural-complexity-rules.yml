@@ -227,6 +227,9 @@ common_rules:
 
   # ----------------------------------------------------------
   # 1.6 절 복잡성 - WHERE
+  # 조건의 복잡도는 조건 수(AND/OR)로 측정
+  # 개별 비교 연산자(=, >=, <=, BETWEEN, LIKE 등)는 
+  # 구조적 복잡도에 영향을 주지 않으므로 별도 카운팅하지 않음
   # ----------------------------------------------------------
   clause_where:
     - id: c_where_cond_1_3
@@ -259,20 +262,6 @@ common_rules:
       detection_method: regex
       pattern: "IN\\s*\\([^)]+\\)"
       note: "서브쿼리 제외"
-      
-    - id: c_where_between
-      name: "BETWEEN"
-      weight: 3
-      weight_per_occurrence: true
-      detection_method: regex
-      pattern: "\\bBETWEEN\\b"
-      
-    - id: c_where_like
-      name: "LIKE"
-      weight: 3
-      weight_per_occurrence: true
-      detection_method: regex
-      pattern: "\\bLIKE\\b"
 
   # ----------------------------------------------------------
   # 1.7 절 복잡성 - GROUP BY / HAVING / ORDER BY
