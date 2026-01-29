@@ -107,10 +107,8 @@
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
 | c_group_by | GROUP BY 사용 | 5 | regex | `\bGROUP\s+BY\b` |
-| c_group_cols_4plus | GROUP BY 컬럼 4개+ | 5 | ast | GROUP BY 컬럼 수 ≥ 4 |
 | c_having | HAVING 사용 | 10 | regex | `\bHAVING\b` |
 | c_order_by | ORDER BY 사용 | 3 | regex | `\bORDER\s+BY\b` |
-| c_order_cols_4plus | ORDER BY 컬럼 4개+ | 5 | ast | ORDER BY 컬럼 수 ≥ 4 |
 
 ---
 
