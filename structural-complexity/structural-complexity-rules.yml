@@ -66,31 +66,31 @@ common_rules:
     - id: c_join_0
       name: "JOIN 없음"
       weight: 0
-      detection_method: ast
+      detection_method: regex
       logic: "join_count == 0"
       
     - id: c_join_1
       name: "JOIN 1개"
       weight: 5
-      detection_method: ast
+      detection_method: regex
       logic: "join_count == 1"
       
     - id: c_join_2_3
       name: "JOIN 2-3개"
       weight: 10
-      detection_method: ast
+      detection_method: regex
       logic: "2 <= join_count <= 3"
       
     - id: c_join_4_5
       name: "JOIN 4-5개"
       weight: 15
-      detection_method: ast
+      detection_method: regex
       logic: "4 <= join_count <= 5"
       
     - id: c_join_6plus
       name: "JOIN 6개 이상"
       weight: 20
-      detection_method: ast
+      detection_method: regex
       logic: "join_count >= 6"
 
   # ----------------------------------------------------------
@@ -229,33 +229,33 @@ common_rules:
   # ----------------------------------------------------------
   # 1.6 절 복잡성 - WHERE
   # 조건의 복잡도는 조건 수(AND/OR)로 측정
+  # 서브쿼리 내 AND/OR는 제외하고 외부 조건만 카운트
   # 개별 비교 연산자(=, >=, <=, BETWEEN, LIKE, IN 등)는 
   # 구조적 복잡도에 영향을 주지 않으므로 별도 카운팅하지 않음
-  # IN (서브쿼리)는 서브쿼리 복잡도에서 측정됨
   # ----------------------------------------------------------
   clause_where:
     - id: c_where_cond_1_3
       name: "조건 1-3개"
       weight: 0
-      detection_method: ast
+      detection_method: regex
       logic: "1 <= where_condition_count <= 3"
       
     - id: c_where_cond_4_6
       name: "조건 4-6개"
       weight: 5
-      detection_method: ast
+      detection_method: regex
       logic: "4 <= where_condition_count <= 6"
       
     - id: c_where_cond_7_10
       name: "조건 7-10개"
       weight: 10
-      detection_method: ast
+      detection_method: regex
       logic: "7 <= where_condition_count <= 10"
       
     - id: c_where_cond_11plus
       name: "조건 11개 이상"
       weight: 15
-      detection_method: ast
+      detection_method: regex
       logic: "where_condition_count >= 11"
 
   # ----------------------------------------------------------

@@ -321,14 +321,43 @@ class SQLStructuralScoringEngine:
         else:
             metrics['select_column_count'] = 0
         
-        # WHERE 조건 수 추정
-        where_match = re.search(r'WHERE\s+(.*?)(?:GROUP|ORDER|HAVING|$)', sql, re.IGNORECASE | re.DOTALL)
-        if where_match:
-            where_clause = where_match.group(1)
-            and_or_count = len(re.findall(r'\b(AND|OR)\b', where_clause, re.IGNORECASE))
-            metrics['where_condition_count'] = and_or_count + 1
-        else:
+        # WHERE 조건 수 (서브쿼리 제외, 순차 스캔 방식)
+        sql_upper = sql.upper()
+        where_start = sql_upper.find('WHERE')
+        if where_start == -1:
             metrics['where_condition_count'] = 0
+        else:
+            # WHERE 종료 위치 찾기
+            end_keywords = ['GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT']
+            where_end = len(sql)
+            for keyword in end_keywords:
+                pos = sql_upper.find(keyword, where_start)
+                if pos != -1 and pos < where_end:
+                    where_end = pos
+            
+            where_clause = sql[where_start + 5:where_end]
+            where_upper = where_clause.upper()
+            
+            # 서브쿼리 깊이 추적하며 AND/OR 카운트
+            and_or_count = 0
+            subquery_depth = 0
+            i = 0
+            while i < len(where_clause):
+                if where_clause[i] == '(':
+                    # ( 이후 공백 건너뛰고 SELECT 확인
+                    j = i + 1
+                    while j < len(where_clause) and where_clause[j] in ' \t\n':
+                        j += 1
+                    if where_upper[j:j+6] == 'SELECT':
+                        subquery_depth += 1
+                elif where_clause[i] == ')' and subquery_depth > 0:
+                    subquery_depth -= 1
+                elif subquery_depth == 0:
+                    if where_upper[i:i+4] == 'AND ' or where_upper[i:i+3] == 'OR ':
+                        and_or_count += 1
+                i += 1
+            
+            metrics['where_condition_count'] = and_or_count + 1 if where_clause.strip() else 0
         
         return metrics
     
