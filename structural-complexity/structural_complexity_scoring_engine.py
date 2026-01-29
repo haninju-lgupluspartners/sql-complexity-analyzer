@@ -474,7 +474,115 @@ class SQLStructuralScoringEngine:
         metrics['case_max_depth'] = max_case_depth
         metrics['has_nested_case'] = max_case_depth >= 2
         
+        # 서브쿼리 개수 및 상관 서브쿼리 검출
+        subquery_metrics = self._calculate_subquery_metrics(sql)
+        metrics['subquery_count'] = subquery_metrics['subquery_count']
+        metrics['has_correlated_subquery'] = subquery_metrics['is_correlated']
+        
         return metrics
+    
+    def _calculate_subquery_metrics(self, sql: str) -> Dict[str, Any]:
+        """서브쿼리 관련 메트릭 계산 (개수 및 상관 서브쿼리 검출)"""
+        sql_upper = sql.upper()
+        
+        # 1. 서브쿼리 위치와 내용 추출 (순차 스캔으로 정확한 범위 파악)
+        # ( 뒤에 공백이 있을 수 있으므로 개선된 패턴 사용
+        subqueries = []  # [(start_pos, end_pos, content), ...]
+        i = 0
+        while i < len(sql):
+            if sql[i] == '(':
+                # ( 뒤의 공백을 건너뛰고 SELECT 확인
+                j = i + 1
+                while j < len(sql) and sql[j] in ' \t\n\r':
+                    j += 1
+                if sql_upper[j:j+6] == 'SELECT':
+                    # 서브쿼리 시작 발견
+                    start = i
+                    depth = 1
+                    k = i + 1
+                    while k < len(sql) and depth > 0:
+                        if sql[k] == '(':
+                            depth += 1
+                        elif sql[k] == ')':
+                            depth -= 1
+                        k += 1
+                    end = k
+                    subqueries.append((start, end, sql[start:end]))
+                    i = k
+                    continue
+            i += 1
+        
+        subquery_count = len(subqueries)
+        
+        # 서브쿼리가 없으면 상관 서브쿼리도 없음
+        if subquery_count == 0:
+            return {
+                'subquery_count': 0,
+                'is_correlated': False
+            }
+        
+        # 2. 전체 SQL에서 서브쿼리를 제외한 외부 SQL 추출
+        outer_sql = ""
+        depth = 0
+        k = 0
+        while k < len(sql):
+            if sql[k] == '(':
+                # ( 뒤의 공백을 건너뛰고 SELECT 확인
+                j = k + 1
+                while j < len(sql) and sql[j] in ' \t\n\r':
+                    j += 1
+                if sql_upper[j:j+6] == 'SELECT':
+                    depth += 1
+                    k += 1
+                    continue
+            if sql[k] == ')' and depth > 0:
+                depth -= 1
+                k += 1
+                continue
+            if depth == 0:
+                outer_sql += sql[k]
+            k += 1
+        
+        # 3. 외부 SQL에서 테이블 별칭 추출
+        sql_keywords = {'ON', 'WHERE', 'AND', 'OR', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 
+                        'JOIN', 'AS', 'SELECT', 'FROM', 'GROUP', 'ORDER', 'BY', 'HAVING'}
+        
+        outer_aliases = set()
+        alias_pattern = re.compile(
+            r'\b(?:FROM|JOIN)\s+(\w+)\s+(?:AS\s+)?(\w+)\b',
+            re.IGNORECASE
+        )
+        for match in alias_pattern.finditer(outer_sql):
+            alias = match.group(2)
+            if alias.upper() not in sql_keywords:
+                outer_aliases.add(alias.upper())
+        
+        # 4. 각 서브쿼리에서 외부 별칭 참조 확인
+        is_correlated = False
+        
+        for start_pos, end_pos, subquery_content in subqueries:
+            # 서브쿼리 내부의 별칭 추출 (이것들은 외부 참조가 아님)
+            inner_aliases = set()
+            for match in alias_pattern.finditer(subquery_content):
+                alias = match.group(2)
+                if alias.upper() not in sql_keywords:
+                    inner_aliases.add(alias.upper())
+            
+            # 외부 별칭 중 서브쿼리 내부에서 정의되지 않은 것만 체크
+            for alias in outer_aliases:
+                if alias not in inner_aliases:
+                    ref_pattern = re.compile(rf'\b{alias}\.\w+', re.IGNORECASE)
+                    if ref_pattern.search(subquery_content):
+                        is_correlated = True
+                        break
+            
+            if is_correlated:
+                break
+        
+        return {
+            'subquery_count': subquery_count,
+            'is_correlated': is_correlated
+        }
     
     def _apply_metric_rules(self, metrics: Dict[str, Any]) -> List[RuleMatch]:
         """메트릭 기반 룰 적용"""
@@ -516,6 +624,18 @@ class SQLStructuralScoringEngine:
             matched_rules.append(RuleMatch('c_subq_depth_2', '서브쿼리 깊이 2', 20, 'structural', 'subquery'))
         else:
             matched_rules.append(RuleMatch('c_subq_depth_3plus', '서브쿼리 깊이 3+', 30, 'structural', 'subquery'))
+        
+        # 서브쿼리 개수 기반 점수 (가중치 5/개)
+        subquery_count = metrics.get('subquery_count', 0)
+        if subquery_count > 0:
+            matched_rules.append(RuleMatch(
+                'c_subq_count', '서브쿼리 개수', 5, 'structural', 'subquery',
+                match_count=subquery_count
+            ))
+        
+        # 상관 서브쿼리 점수
+        if metrics.get('has_correlated_subquery', False):
+            matched_rules.append(RuleMatch('c_subq_correlated', '상관 서브쿼리', 15, 'structural', 'subquery'))
         
         # 테이블 수 기반 점수
         table_count = metrics.get('table_count', 0)
