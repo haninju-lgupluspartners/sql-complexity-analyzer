@@ -288,43 +288,191 @@ class SQLStructuralScoringEngine:
         join_pattern = re.compile(r'\bJOIN\b', re.IGNORECASE)
         metrics['join_count'] = len(join_pattern.findall(sql))
         
-        # 서브쿼리 깊이 (간단한 추정)
-        subquery_depth = 0
-        temp_sql = sql
-        while '(' in temp_sql:
-            # SELECT가 포함된 괄호 찾기
-            if re.search(r'\(\s*SELECT', temp_sql, re.IGNORECASE):
-                subquery_depth += 1
-                temp_sql = re.sub(r'\([^()]*\)', '', temp_sql)
-            else:
-                break
-        metrics['subquery_depth'] = min(subquery_depth, 5)
+        # 서브쿼리 깊이 (순차 스캔 방식)
+        max_depth = 0
+        current_depth = 0
+        sql_upper = sql.upper()
+        i = 0
+        while i < len(sql):
+            # (SELECT 패턴 발견 시 깊이 증가
+            if sql[i] == '(' and sql_upper[i:i+10].startswith('(SELECT'):
+                current_depth += 1
+                max_depth = max(max_depth, current_depth)
+            # ) 발견 시 서브쿼리 내부라면 깊이 감소
+            elif sql[i] == ')' and current_depth > 0:
+                current_depth -= 1
+            i += 1
+        metrics['subquery_depth'] = min(max_depth, 5)
         
-        # 테이블 수 추정 (FROM, JOIN 뒤의 테이블)
-        table_pattern = re.compile(r'\b(FROM|JOIN)\s+(\w+)', re.IGNORECASE)
-        tables = table_pattern.findall(sql)
-        metrics['table_count'] = len(set([t[1].upper() for t in tables]))
+        # 테이블 수 추정 (개선된 로직)
+        # - 콤마로 구분된 테이블 지원
+        # - 스키마.테이블 형식에서 실제 테이블명 추출
+        # - SQL 키워드(LATERAL 등) 필터링
+        tables = set()
+        sql_keywords = {
+            'LATERAL', 'NATURAL', 'OUTER', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS',
+            'SELECT', 'WHERE', 'AND', 'OR', 'ON', 'AS', 'SET', 'VALUES', 'INTO'
+        }
         
-        # SELECT 컬럼 수 추정
-        select_match = re.search(r'SELECT\s+(.*?)\s+FROM', sql, re.IGNORECASE | re.DOTALL)
-        if select_match:
-            select_clause = select_match.group(1)
-            if '*' in select_clause:
-                metrics['select_column_count'] = -1  # SELECT *
-            else:
-                # 콤마로 분리 (단순 추정)
-                metrics['select_column_count'] = select_clause.count(',') + 1
-        else:
+        # FROM 절 처리 (콤마로 구분된 테이블 포함)
+        from_pattern = re.compile(
+            r'\bFROM\s+(?!\s*\()([\w.]+(?:\s+\w+)?(?:\s*,\s*[\w.]+(?:\s+\w+)?)*)',
+            re.IGNORECASE
+        )
+        for match in from_pattern.finditer(sql):
+            from_clause = match.group(1)
+            table_parts = from_clause.split(',')
+            for part in table_parts:
+                part = part.strip()
+                if part:
+                    tokens = part.split()
+                    if tokens:
+                        table_name = tokens[0]
+                        if '.' in table_name:
+                            table_name = table_name.split('.')[-1]
+                        if table_name.upper() not in sql_keywords:
+                            tables.add(table_name.upper())
+        
+        # JOIN 절 처리 (LATERAL 등 키워드 제외)
+        join_pattern = re.compile(
+            r'\bJOIN\s+(?!LATERAL\b)(?!\s*\()([\w.]+)',
+            re.IGNORECASE
+        )
+        for match in join_pattern.finditer(sql):
+            table_name = match.group(1)
+            if '.' in table_name:
+                table_name = table_name.split('.')[-1]
+            if table_name.upper() not in sql_keywords:
+                tables.add(table_name.upper())
+        
+        # LATERAL 서브쿼리 내부 테이블 추출
+        lateral_pattern = re.compile(r'\bLATERAL\s*\(([^)]+)\)', re.IGNORECASE)
+        for match in lateral_pattern.finditer(sql):
+            inner_sql = match.group(1)
+            inner_from = re.findall(r'\bFROM\s+([\w.]+)', inner_sql, re.IGNORECASE)
+            for table_name in inner_from:
+                if '.' in table_name:
+                    table_name = table_name.split('.')[-1]
+                if table_name.upper() not in sql_keywords:
+                    tables.add(table_name.upper())
+        
+        metrics['table_count'] = len(tables)
+        
+        # SELECT 컬럼 수 추정 (개선된 로직)
+        # - 순차 스캔으로 최상위 레벨의 FROM 찾기 (서브쿼리 내 FROM 무시)
+        # - SELECT * 검사 개선 (단독 * 또는 table.* 만)
+        # - 괄호 내 콤마 무시
+        sql_upper = sql.upper()
+        select_start = sql_upper.find('SELECT')
+        
+        if select_start == -1:
             metrics['select_column_count'] = 0
-        
-        # WHERE 조건 수 추정
-        where_match = re.search(r'WHERE\s+(.*?)(?:GROUP|ORDER|HAVING|$)', sql, re.IGNORECASE | re.DOTALL)
-        if where_match:
-            where_clause = where_match.group(1)
-            and_or_count = len(re.findall(r'\b(AND|OR)\b', where_clause, re.IGNORECASE))
-            metrics['where_condition_count'] = and_or_count + 1
         else:
+            # SELECT 뒤부터 순차 스캔으로 최상위 레벨의 FROM 찾기
+            start_pos = select_start + 6  # len('SELECT')
+            depth = 0
+            from_pos = -1
+            i = start_pos
+            
+            while i < len(sql) - 3:
+                char = sql[i]
+                if char == '(':
+                    depth += 1
+                elif char == ')':
+                    depth -= 1
+                elif depth == 0 and sql_upper[i:i+4] == 'FROM':
+                    # 단어 경계 확인
+                    before_ok = i == 0 or not sql[i-1].isalnum()
+                    after_ok = i + 4 >= len(sql) or not sql[i+4].isalnum()
+                    if before_ok and after_ok:
+                        from_pos = i
+                        break
+                i += 1
+            
+            if from_pos == -1:
+                metrics['select_column_count'] = 0
+            else:
+                select_clause = sql[start_pos:from_pos].strip()
+                # DISTINCT 제거
+                select_clause_clean = re.sub(r'^\s*(ALL\s+)?DISTINCT\s+', '', select_clause, flags=re.IGNORECASE)
+                
+                # SELECT * 검사 (단독 * 또는 table.* 만)
+                if re.match(r'^\s*\*\s*$', select_clause_clean):
+                    metrics['select_column_count'] = -1
+                elif re.match(r'^\s*\w+\.\*\s*$', select_clause_clean):
+                    metrics['select_column_count'] = -1
+                else:
+                    # 괄호 내용을 플레이스홀더로 치환하여 내부 콤마 무시
+                    processed = select_clause_clean
+                    for _ in range(50):  # 무한루프 방지
+                        match = re.search(r'\([^()]*\)', processed)
+                        if not match:
+                            break
+                        processed = processed[:match.start()] + '__PH__' + processed[match.end():]
+                    
+                    metrics['select_column_count'] = processed.count(',') + 1
+        
+        # WHERE 조건 수 (서브쿼리 제외, 순차 스캔 방식)
+        sql_upper = sql.upper()
+        where_start = sql_upper.find('WHERE')
+        if where_start == -1:
             metrics['where_condition_count'] = 0
+        else:
+            # WHERE 종료 위치 찾기
+            end_keywords = ['GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT']
+            where_end = len(sql)
+            for keyword in end_keywords:
+                pos = sql_upper.find(keyword, where_start)
+                if pos != -1 and pos < where_end:
+                    where_end = pos
+            
+            where_clause = sql[where_start + 5:where_end]
+            where_upper = where_clause.upper()
+            
+            # 서브쿼리 깊이 추적하며 AND/OR 카운트
+            and_or_count = 0
+            subquery_depth = 0
+            i = 0
+            while i < len(where_clause):
+                if where_clause[i] == '(':
+                    # ( 이후 공백 건너뛰고 SELECT 확인
+                    j = i + 1
+                    while j < len(where_clause) and where_clause[j] in ' \t\n':
+                        j += 1
+                    if where_upper[j:j+6] == 'SELECT':
+                        subquery_depth += 1
+                elif where_clause[i] == ')' and subquery_depth > 0:
+                    subquery_depth -= 1
+                elif subquery_depth == 0:
+                    if where_upper[i:i+4] == 'AND ' or where_upper[i:i+3] == 'OR ':
+                        and_or_count += 1
+                i += 1
+            
+            metrics['where_condition_count'] = and_or_count + 1 if where_clause.strip() else 0
+        
+        # 중첩 CASE 검출 (순차 스캔으로 CASE/END 깊이 추적)
+        case_pattern = re.compile(r'\bCASE\b', re.IGNORECASE)
+        end_pattern = re.compile(r'\bEND\b', re.IGNORECASE)
+        
+        events = []
+        for match in case_pattern.finditer(sql):
+            events.append((match.start(), 'CASE'))
+        for match in end_pattern.finditer(sql):
+            events.append((match.start(), 'END'))
+        
+        events.sort(key=lambda x: x[0])
+        
+        depth = 0
+        max_case_depth = 0
+        for pos, event_type in events:
+            if event_type == 'CASE':
+                depth += 1
+                max_case_depth = max(max_case_depth, depth)
+            elif event_type == 'END' and depth > 0:
+                depth -= 1
+        
+        metrics['case_max_depth'] = max_case_depth
+        metrics['has_nested_case'] = max_case_depth >= 2
         
         return metrics
     
@@ -397,6 +545,10 @@ class SQLStructuralScoringEngine:
             matched_rules.append(RuleMatch('c_where_cond_7_10', '조건 7-10개', 10, 'clause', 'where'))
         elif cond_count >= 11:
             matched_rules.append(RuleMatch('c_where_cond_11plus', '조건 11개 이상', 15, 'clause', 'where'))
+        
+        # 중첩 CASE 점수
+        if metrics.get('has_nested_case', False):
+            matched_rules.append(RuleMatch('c_case_nested', '중첩 CASE', 15, 'function_expression', 'case'))
         
         return matched_rules
 

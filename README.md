@@ -138,7 +138,7 @@ python3 structural_complexity_scoring_engine.py \
 | 항목 | 설명 |
 |------|------|
 | SELECT | 컬럼 수 (1-5/6-10/11-20/21+), DISTINCT |
-| WHERE | 조건 수 (AND/OR 기준), IN 목록 |
+| WHERE | 조건 수 (AND/OR 기준) |
 | GROUP BY | 사용 여부, 컬럼 수 |
 | HAVING | 사용 여부 |
 | ORDER BY | 사용 여부, 컬럼 수 |

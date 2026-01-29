@@ -43,22 +43,24 @@
 
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
-| c_join_0 | JOIN 없음 | 0 | ast | JOIN 카운트 = 0 |
-| c_join_1 | JOIN 1개 | 5 | ast | JOIN 카운트 = 1 |
-| c_join_2_3 | JOIN 2-3개 | 10 | ast | JOIN 카운트 2-3 |
-| c_join_4_5 | JOIN 4-5개 | 15 | ast | JOIN 카운트 4-5 |
-| c_join_6plus | JOIN 6개 이상 | 20 | ast | JOIN 카운트 ≥ 6 |
+| c_join_0 | JOIN 없음 | 0 | regex | JOIN 카운트 = 0 |
+| c_join_1 | JOIN 1개 | 5 | regex | JOIN 카운트 = 1 |
+| c_join_2_3 | JOIN 2-3개 | 10 | regex | JOIN 카운트 2-3 |
+| c_join_4_5 | JOIN 4-5개 | 15 | regex | JOIN 카운트 4-5 |
+| c_join_6plus | JOIN 6개 이상 | 20 | regex | JOIN 카운트 ≥ 6 |
 
 ### 1.2 구조적 복잡성 - 서브쿼리
 
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
-| c_subq_0 | 서브쿼리 없음 | 0 | ast | 깊이 = 0 |
-| c_subq_depth_1 | 서브쿼리 깊이 1 | 10 | ast | 깊이 = 1 |
-| c_subq_depth_2 | 서브쿼리 깊이 2 | 20 | ast | 깊이 = 2 |
-| c_subq_depth_3plus | 서브쿼리 깊이 3+ | 30 | ast | 깊이 ≥ 3 |
-| c_subq_count | 서브쿼리 개수 | 5/개 | ast | 서브쿼리 총 개수 × 5 |
-| c_subq_correlated | 상관 서브쿼리 | 15 | ast | 외부 테이블 참조 |
+| c_subq_0 | 서브쿼리 없음 | 0 | regex | 깊이 = 0 |
+| c_subq_depth_1 | 서브쿼리 깊이 1 | 10 | regex | 깊이 = 1 |
+| c_subq_depth_2 | 서브쿼리 깊이 2 | 20 | regex | 깊이 = 2 |
+| c_subq_depth_3plus | 서브쿼리 깊이 3+ | 30 | regex | 깊이 ≥ 3 |
+| c_subq_count | 서브쿼리 개수 | 5/개 | regex | 서브쿼리 총 개수 × 5 |
+| c_subq_correlated | 상관 서브쿼리 | 15 | regex | 외부 테이블 참조 |
+
+> 서브쿼리 깊이는 순차 스캔 방식으로 `(SELECT` 패턴을 추적하여 계산합니다.
 
 ### 1.3 구조적 복잡성 - CTE
 
@@ -82,34 +84,31 @@
 
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
-| c_select_cols_1_5 | 컬럼 1-5개 | 0 | ast | SELECT 컬럼 수 1-5 |
-| c_select_cols_6_10 | 컬럼 6-10개 | 5 | ast | SELECT 컬럼 수 6-10 |
-| c_select_cols_11_20 | 컬럼 11-20개 | 10 | ast | SELECT 컬럼 수 11-20 |
-| c_select_cols_21plus | 컬럼 21개 이상 | 15 | ast | SELECT 컬럼 수 ≥ 21 |
+| c_select_cols_1_5 | 컬럼 1-5개 | 0 | regex | SELECT 컬럼 수 1-5 |
+| c_select_cols_6_10 | 컬럼 6-10개 | 5 | regex | SELECT 컬럼 수 6-10 |
+| c_select_cols_11_20 | 컬럼 11-20개 | 10 | regex | SELECT 컬럼 수 11-20 |
+| c_select_cols_21plus | 컬럼 21개 이상 | 15 | regex | SELECT 컬럼 수 ≥ 21 |
 | c_select_star | SELECT * | 5 | regex | `SELECT\s+\*` |
 | c_distinct | DISTINCT | 5 | regex | `SELECT\s+(ALL\s+)?DISTINCT` |
 
 ### 1.6 절 복잡성 - WHERE
 
-> 조건의 복잡도는 조건 수(AND/OR)로 측정합니다. 개별 비교 연산자(=, >=, <=, BETWEEN, LIKE 등)는 구조적 복잡도에 영향을 주지 않으므로 별도 카운팅하지 않습니다.
+> 조건의 복잡도는 조건 수(AND/OR)로 측정합니다. 서브쿼리 내 AND/OR는 제외하고 외부 조건만 카운트합니다. 개별 비교 연산자(=, >=, <=, BETWEEN, LIKE, IN 등)는 구조적 복잡도에 영향을 주지 않으므로 별도 카운팅하지 않습니다.
 
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
-| c_where_cond_1_3 | 조건 1-3개 | 0 | ast | 조건 수 1-3 |
-| c_where_cond_4_6 | 조건 4-6개 | 5 | ast | 조건 수 4-6 |
-| c_where_cond_7_10 | 조건 7-10개 | 10 | ast | 조건 수 7-10 |
-| c_where_cond_11plus | 조건 11개 이상 | 15 | ast | 조건 수 ≥ 11 |
-| c_where_in_list | IN (값 목록) | 5 | regex | `IN\s*\([^)]+\)` (서브쿼리 제외) |
+| c_where_cond_1_3 | 조건 1-3개 | 0 | regex | 조건 수 1-3 |
+| c_where_cond_4_6 | 조건 4-6개 | 5 | regex | 조건 수 4-6 |
+| c_where_cond_7_10 | 조건 7-10개 | 10 | regex | 조건 수 7-10 |
+| c_where_cond_11plus | 조건 11개 이상 | 15 | regex | 조건 수 ≥ 11 |
 
 ### 1.7 절 복잡성 - GROUP BY / HAVING / ORDER BY
 
 | ID | 항목 | 가중치 | 검출방식 | 검출 로직 |
 |----|------|--------|---------|----------|
 | c_group_by | GROUP BY 사용 | 5 | regex | `\bGROUP\s+BY\b` |
-| c_group_cols_4plus | GROUP BY 컬럼 4개+ | 5 | ast | GROUP BY 컬럼 수 ≥ 4 |
 | c_having | HAVING 사용 | 10 | regex | `\bHAVING\b` |
 | c_order_by | ORDER BY 사용 | 3 | regex | `\bORDER\s+BY\b` |
-| c_order_cols_4plus | ORDER BY 컬럼 4개+ | 5 | ast | ORDER BY 컬럼 수 ≥ 4 |
 
 ---
 
@@ -137,7 +136,7 @@
 |----|------|--------|---------|----------|
 | c_case | CASE 표현식 | 5/개 | regex | `\bCASE\b` 카운트 × 5 |
 | c_case_when | WHEN 절 | 2/개 | regex | `\bWHEN\b` 카운트 × 2 |
-| c_case_nested | 중첩 CASE | 15 | ast | CASE 내부에 CASE 존재 |
+| c_case_nested | 중첩 CASE | 15 | regex | CASE/END 깊이 ≥ 2 |
 
 ### 1.11 함수/표현식 - 공통 함수
 
@@ -159,9 +158,9 @@
 | c_len_long | 긴 쿼리 (500-1000자) | 10 | metric | 500 ≤ len(sql) < 1000 |
 | c_len_very_long | 매우 긴 쿼리 (1000-2000자) | 15 | metric | 1000 ≤ len(sql) < 2000 |
 | c_len_huge | 초대형 쿼리 (2000자+) | 20 | metric | len(sql) ≥ 2000 |
-| c_tables_3_5 | 테이블 3-5개 | 5 | ast | 참조 테이블 수 3-5 |
-| c_tables_6_10 | 테이블 6-10개 | 10 | ast | 참조 테이블 수 6-10 |
-| c_tables_11plus | 테이블 11개 이상 | 15 | ast | 참조 테이블 수 ≥ 11 |
+| c_tables_3_5 | 테이블 3-5개 | 5 | regex | 참조 테이블 수 3-5 |
+| c_tables_6_10 | 테이블 6-10개 | 10 | regex | 참조 테이블 수 6-10 |
+| c_tables_11plus | 테이블 11개 이상 | 15 | regex | 참조 테이블 수 ≥ 11 |
 
 ---
 
