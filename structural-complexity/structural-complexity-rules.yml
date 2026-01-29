@@ -228,8 +228,9 @@ common_rules:
   # ----------------------------------------------------------
   # 1.6 절 복잡성 - WHERE
   # 조건의 복잡도는 조건 수(AND/OR)로 측정
-  # 개별 비교 연산자(=, >=, <=, BETWEEN, LIKE 등)는 
+  # 개별 비교 연산자(=, >=, <=, BETWEEN, LIKE, IN 등)는 
   # 구조적 복잡도에 영향을 주지 않으므로 별도 카운팅하지 않음
+  # IN (서브쿼리)는 서브쿼리 복잡도에서 측정됨
   # ----------------------------------------------------------
   clause_where:
     - id: c_where_cond_1_3
@@ -255,13 +256,6 @@ common_rules:
       weight: 15
       detection_method: ast
       logic: "where_condition_count >= 11"
-      
-    - id: c_where_in_list
-      name: "IN (값 목록)"
-      weight: 5
-      detection_method: regex
-      pattern: "IN\\s*\\([^)]+\\)"
-      note: "서브쿼리 제외"
 
   # ----------------------------------------------------------
   # 1.7 절 복잡성 - GROUP BY / HAVING / ORDER BY
